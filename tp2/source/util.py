@@ -8,28 +8,33 @@ import soundfile as sf
 import os
 import pyaudio
 import wave
+import platform
+import tempfile
+import matplotlib.pyplot as plt
+
+from numpy.random import randn
 
 
 def play(y, Fe=44100):
-    z = (np.real(y)/(abs(np.real(y)).max())).astype(np.float16)
-
-    # see: http://people.csail.mit.edu/hubert/pyaudio/docs/
-    # and: https://stackoverflow.com/a/27961508
-    number_channels = z.shape[1] if len(z.shape) == 2 else 1
-    print(Fe)
-    p = pyaudio.PyAudio()
-    stream = p.open(
-        format=p.get_format_from_width(z.itemsize),
-        channels=number_channels,
-        rate=Fe,
-        output=True)
-
-    stream.write(z)
-
-    stream.stop_stream()
-    stream.close()
-
-    p.terminate()
+    z = np.real(y)/(abs(np.real(y)).max())
+    fichier = tempfile.mktemp()+'SON_TP.wav'
+    sec = len(y)/Fe
+    if sec <= 20:
+        rep = True
+    if sec > 20:
+        print('Vous allez créer un fichier son de plus de 20 secondes.')
+        rep = None
+        while rep is None:
+            x = input('Voulez-vous continuer? (o/n)')
+            if x == 'o':
+                rep = True
+            if x == 'n':
+                rep = False
+            if rep is None:
+                print('Répondre par o ou n, merci. ')
+    if rep:
+        sf.write(fichier, z, Fe)
+        os.system('/usr/bin/play '+fichier+' &')
 
 
 def moindres_carres(p, x, z):
@@ -89,6 +94,108 @@ def lpc_morceau(p, x):
     h1 = -np.linalg.inv(L)@V
     h = np.concatenate((np.ones(1), h1))
     return h
+
+
+def lpc(signal, p, nb):
+    """ fonction qui renvoie les meilleurs coefficients de prediction linéaire 
+       pour les morceaux de signal de taille nb. Il y a, en gros, N/nb lignes
+       ou N est le nombre d'échantillons du signal.
+       Renvoie également la puissance du résidu epsilon"""
+
+    sc = signal.copy().reshape(-1)
+    # un filtrage passe haut pour renforcer les hautes fréquences
+    sc = lfilter([1, -0.95], 1, sc)
+    N = len(sc)
+    r = N % nb
+    if r == 0:
+        taille = N//nb
+    else:
+        taille = N//nb+1
+    out = np.zeros((taille, p+1))
+    res = np.zeros(taille)
+    for k in range(taille):
+        deb = k*nb
+        fin = min((k+1)*nb, len(sc))
+        tmp = sc[deb:fin]
+
+        if len(tmp) < nb:
+            tmp = np.concatenate((tmp, np.zeros(nb-len(tmp))))
+
+        h = lpc_morceau(p, tmp)
+        out[k, :] = h
+        epsilon = lfilter(h, 1, tmp)
+
+        res[k] = ((epsilon**2).sum()/nb)**0.5
+    return out, res
+
+
+def joue_lpc(lpcs, res, nb):
+    """joue le resultat de lpcs: cree des trames de bruit, les filtre par les coefficients de la LPC et renvoie un signal concaténé."""
+    taille = lpcs.shape[0]
+    out = np.zeros(taille*nb)
+    cordesvocales = randn(len(out))
+    # Alternative les cordes vocales envoient des impulsions régulières
+    # cordesvocales=np.zeros(len(out))
+    # ordesvocales[::NOMBRE_inconnu]=1   #COMPLETER
+    for k in range(taille):
+        epsilon = res[k]*cordesvocales[k*nb:(k+1)*nb]
+
+        tmp = lfilter([1], lpcs[k, :], epsilon)
+        out[k*nb:(k+1)*nb] = tmp
+
+    return out
+
+
+def affiche_spectrogramme(u, N, M=None, nb=None, Fe=8192):
+    """Affiche le specrogramme du signal u
+     La taille des fenêtres est N
+     Si M n'est pas fourni il est pris égal à N
+     nb est le pas entre deux fenêtres dont on calcule la TFD 
+     si nb n'est pas fourni, nb est pris égal a N/2"""
+
+    if M is None:
+        M = N
+    if nb is None:
+        nb = N/2
+    # On commence par créer un tableau de la bonne taille don les colonnes seront
+    # calculées par une_colonne_spectrogramme
+    uu = u.copy().reshape(-1)
+    L = len(u)
+    nombre_fen = int((L-N)//nb+1)
+    spectro = np.zeros((M//2+1, nombre_fen))
+    for k in range(nombre_fen):
+        spectro[:, k] = une_colonne_spectrogramme(u, M, N, k*nb)
+    temps_debut = 0
+    temps_fin = 1/Fe*nb*nombre_fen
+    freq_debut = 0
+    freq_fin = (M/2)*(1/M)*Fe
+
+    # ci-dessous de la cuisine python pour un affichage d'une image deux fois
+    # pus large que haute
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.imshow(np.log(np.flipud(spectro)), interpolation='none',  # cmap=plt.cm.Reds
+              extent=[temps_debut, temps_fin, freq_debut, freq_fin])
+    ax.set_aspect(1/2*(temps_fin/freq_fin))
+    return spectro
+
+
+def une_colonne_spectrogramme(u, M, N, n):
+    """ 
+    Renvoie une colonne de spectrogramme c'est a dire la TFD de taille M
+    d'une morceau de u debutant en n et de taille N multiplie par une fenêtre
+     de hamming """
+    uu = u.copy().reshape(-1)  # on recopie sinon on risque d'écraser
+    # construction de la fenêtre
+    idx = np.arange(0, N)
+    w = 0.54-0.46*np.cos(2*np.pi*idx/(N-1))
+    # les index tels que u(m)w(n-m) non nul
+    m = np.arange(n, n+N).astype(np.int)
+    morceau = uu[m]  # morceau utile de u
+    fenu = morceau*w
+    Uc = np.fft.fft(fenu, M)  # on calcule la TFD
+    Uc = abs(Uc)  # on s'intéresse seulement au module
+    Uc = Uc[0:M//2+1]  # pour un signal reel il suffit de garder la moitié
+    return Uc
 
 
 def norm(X):
