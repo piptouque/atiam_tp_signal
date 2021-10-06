@@ -147,7 +147,7 @@ def joue_lpc(lpcs, res, nb):
 
 
 def affiche_spectrogramme(u, N, M=None, nb=None, Fe=8192):
-    """Affiche le specrogramme du signal u
+    """Affiche le spectrogramme du signal u
      La taille des fenêtres est N
      Si M n'est pas fourni il est pris égal à N
      nb est le pas entre deux fenêtres dont on calcule la TFD 

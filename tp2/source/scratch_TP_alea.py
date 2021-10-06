@@ -28,7 +28,7 @@ randn = np.random.randn
 
 
 def une_colonne_spectrogramme(u, M, N, n):
-    """ 
+    """
     Renvoie une colonne de spectrogramme c'est a dire la TFD de taille M
     d'une morceau de u debutant en n et de taille N multiplie par une fenêtre
      de hamming """
@@ -50,7 +50,7 @@ def affiche_spectrogramme(u, N, M=None, nb=None, Fe=8192):
     """Affiche le specrogramme du signal u
      La taille des fenêtres est N
      Si M n'est pas fourni il est pris égal à N
-     nb est le pas entre deux fenêtres dont on calcule la TFD 
+     nb est le pas entre deux fenêtres dont on calcule la TFD
      si nb n'est pas fourni, nb est pris égal a N/2"""
 
     if M is None:
@@ -144,14 +144,14 @@ hestim
 
 
 def lpc(signal, p, nb):
-    """ fonction qui renvoie les meilleurs coefficients de prediction linéaire 
+    """ fonction qui renvoie les meilleurs coefficients de prediction linéaire
        pour les morceaux de signal de taille nb. Il y a, en gros, N/nb lignes
        ou N est le nombre d'échantillons du signal.
        Renvoie également la puissance du résidu epsilon"""
 
     sc = signal.copy().reshape(-1)
     # un filtrage passe haut pour renforcer les hautes fréquences
-    sc = lfilter([1, -0.95], 1, sc)
+    sc = lfilter([1, -0.95], 1, sc)
     N = len(sc)
     r = N % nb
     if r == 0:
