@@ -15,20 +15,6 @@ import matplotlib.pyplot as plt
 from numpy.random import randn
 
 
-def cartesian_product(*arrays):
-    """[summary]
-    taken from:  https://stackoverflow.com/a/11146645
-    Returns:
-        [type]: [description]
-    """
-    la = len(arrays)
-    dtype = np.result_type(*arrays)
-    arr = np.empty([len(a) for a in arrays] + [la], dtype=dtype)
-    for i, a in enumerate(np.ix_(*arrays)):
-        arr[..., i] = a
-    return arr.reshape(-1, la)
-
-
 def polyphase_i(h: np.ndarray, m: int) -> np.ndarray:
     ids = np.array([m * np.arange(h.shape[0]//m) + k for k in np.arange(m)])
     # see: https://stackoverflow.com/a/39771165
